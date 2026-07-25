@@ -46,6 +46,10 @@ export * from "./utils/paramcoders/server/ServerParamEncoder";
 export * from "./wallets/IBitcoinWallet";
 export * from "./wallets/ILightningWallet";
 export * from "./wallets/ILxWallet";
+export * from "./wallets/lx/NodeStorageAdapter";
+export * from "./wallets/lx/LxClient";
+export * from "./wallets/lx/LxPoller";
+export * from "./wallets/lx/LxWallet";
 export * from "./wallets/ISpvVaultSigner";
 
 export * from "./swaps/spv_vault_swap/SpvVaults";

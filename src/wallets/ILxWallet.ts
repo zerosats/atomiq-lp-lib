@@ -33,6 +33,8 @@ import {Command} from "@atomiqlabs/server-base";
 export interface ILxWallet {
 
     init(): Promise<void>;
+    /** Stop background work (poller + connectivity watchdog). Idempotent. */
+    stop(): void;
 
     isReady(): boolean;
     getStatus(): string;
@@ -53,14 +55,19 @@ export interface ILxWallet {
     waitForDeposit(statechainId: string, abortSignal?: AbortSignal): Promise<LxStatecoin>;
 
     createLatchedTransfer(init: LxLatchedTransferInit): Promise<LxLatchedTransfer>;
-    settleLatchedTransfer(batchId: string): Promise<LxLatchSettleResult>;
+    /**
+     * Reveal the latch preimage. Polls until the receiver has claimed the coin
+     * (the SE withholds the preimage until then, which is what makes the swap
+     * atomic), so pass a timeout / abort to bound the wait.
+     */
+    settleLatchedTransfer(batchId: string, opts?: LxLatchSettleOptions): Promise<LxLatchSettleResult>;
     cancelLatchedTransfer(batchId: string): Promise<void>;
 
     send(init: LxTransferInit): Promise<LxTransferStatus>;
     getTransfer(statechainId: string): Promise<LxTransferStatus | null>;
     waitForTransfer(statechainId: string, abortSignal?: AbortSignal): Promise<LxTransferStatus>;
 
-    newReceiveAddress(): Promise<LxReceiveAddress>;
+    newReceiveAddress(generateBatchId?: boolean): Promise<LxReceiveAddress>;
     receiveTransfers(): Promise<LxReceiveResult>;
 
     withdraw(statechainId: string, toAddress: string, feeRate?: number): Promise<string>;
@@ -131,6 +138,13 @@ export type LxLatchedTransfer = {
 /** settleLatchedTransfer reveals the preimage (H = sha256(preimage)) as output. */
 export type LxLatchSettleResult = {
     preimage: string
+};
+
+/** Bounds the settleLatchedTransfer poll that waits for the receiver to claim. */
+export type LxLatchSettleOptions = {
+    abortSignal?: AbortSignal,
+    timeoutMs?: number,
+    pollIntervalMs?: number
 };
 
 /** Init for a plain (non-latched) whole-coin send. */

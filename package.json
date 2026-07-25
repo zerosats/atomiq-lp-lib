@@ -26,6 +26,7 @@
     "@atomiqlabs/base": "^13.5.0",
     "@atomiqlabs/server-base": "^3.0.0",
     "@scure/btc-signer": "1.6.0",
+    "@zerosats/ml-core": "^0.1.0",
     "express": "4.21.1",
     "promise-queue-ts": "1.0.0"
   },
