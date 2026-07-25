@@ -50,6 +50,12 @@ export interface ILxWallet {
      */
     getIdentityPublicKey(): Promise<string>;
 
+    /**
+     * Mint a deposit token. On a paid-token SE the caller must pay its `fee` to
+     * `depositAddress` and wait `confirmationTarget` confirmations before the
+     * token can back a deposit; then pass the `tokenId` to createDeposit.
+     */
+    newDepositToken(): Promise<LxDepositToken>;
     createDeposit(init: LxDepositInit): Promise<LxDeposit>;
     getCoin(statechainId: string): Promise<LxStatecoin | null>;
     waitForDeposit(statechainId: string, abortSignal?: AbortSignal): Promise<LxStatecoin>;
@@ -142,6 +148,18 @@ export type LxDeposit = {
     depositAddress: string,
     statechainId: string,
     amount: bigint
+};
+
+/**
+ * A minted deposit token. On a paid-token SE, `fee` sats must be paid to
+ * `depositAddress` and confirmed (`confirmationTarget` blocks) before the token
+ * backs a deposit. `fee` is 0 on a free-token SE.
+ */
+export type LxDepositToken = {
+    tokenId: string,
+    depositAddress: string,
+    fee: bigint,
+    confirmationTarget: number
 };
 
 /**

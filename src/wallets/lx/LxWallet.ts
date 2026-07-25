@@ -13,6 +13,7 @@ import type {
     LxStatecoin,
     LxDepositInit,
     LxDeposit,
+    LxDepositToken,
     LxLatchedTransferInit,
     LxLatchedTransfer,
     LxLatchSettleResult,
@@ -121,6 +122,17 @@ export class LxWallet implements ILxWallet {
     // path, is open (Q9). Not needed for deposit/send/withdraw, so left unresolved.
     async getIdentityPublicKey(): Promise<string> {
         throw new Error("getIdentityPublicKey not implemented: no wallet-level identity key in Mercury (Q9)");
+    }
+
+    async newDepositToken(): Promise<LxDepositToken> {
+        const t = await this.lxClient.client.wallet.newToken();
+        if (t.deposit_address == null) throw new Error("SE returned a token without a deposit address");
+        return {
+            tokenId: t.token_id,
+            depositAddress: t.deposit_address,
+            fee: BigInt(t.fee),
+            confirmationTarget: t.confirmation_target
+        };
     }
 
     async createDeposit(init: LxDepositInit): Promise<LxDeposit> {
@@ -270,9 +282,44 @@ export class LxWallet implements ILxWallet {
                     },
                     parser: async (args, sendLine): Promise<any> => {
                         if (!this.isReady()) throw new Error("LX wallet not ready yet, monitor with 'status'");
-                        const deposit = await this.createDeposit({ amount: args.amount });
+                        // On a paid-token SE the operator must fund the token first;
+                        // mint it, print the fee address, then poll until the SE
+                        // confirms it and can issue the statecoin deposit address.
+                        const token = await this.newDepositToken();
+                        if (token.fee > 0n) {
+                            sendLine("Pay token fee " + token.fee.toString() + " sats to " + token.depositAddress +
+                                " and confirm " + token.confirmationTarget + " block(s); waiting...");
+                        }
+                        let deposit: LxDeposit | null = null;
+                        for (let i = 0; i < 60; i++) {
+                            try {
+                                deposit = await this.createDeposit({ amount: args.amount, tokenId: token.tokenId });
+                                break;
+                            } catch (e) {
+                                const body = e instanceof SERejected ? JSON.stringify(e.body) : String(e);
+                                if (!body.includes("not confirmed") && !body.includes("Token")) throw e;
+                                await new Promise((r) => setTimeout(r, 3000));
+                            }
+                        }
+                        if (deposit == null) throw new Error("deposit token was not confirmed in time");
                         sendLine("Send " + deposit.amount.toString() + " sats to: " + deposit.depositAddress);
                         return deposit;
+                    }
+                }
+            ),
+            createCommand(
+                "lxsync",
+                "Advance funded deposits (mint and sign backup txs), then list coins",
+                {
+                    args: {},
+                    parser: async (args, sendLine): Promise<any> => {
+                        if (!this.isReady()) throw new Error("LX wallet not ready yet, monitor with 'status'");
+                        await this.lxClient.client.wallet.sync(this.name);
+                        const coins = await this.lxClient.client.wallet.list(this.name);
+                        for (const c of coins) {
+                            sendLine((c.statechain_id ?? "?") + "  " + c.status + "  " + (c.amount ?? "?") + " sats");
+                        }
+                        return coins.map(toLxStatecoin);
                     }
                 }
             ),
