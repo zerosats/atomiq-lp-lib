@@ -7,10 +7,10 @@ import {
 } from "@atomiqlabs/server-base";
 import { SERejected } from "@zerosats/ml-core";
 import type { StatecoinSummary } from "@zerosats/ml-core";
+import { LxStatecoinStatus } from "../ILxWallet";
 import type {
     ILxWallet,
     LxStatecoin,
-    LxStatecoinStatus,
     LxDepositInit,
     LxDeposit,
     LxLatchedTransferInit,
@@ -42,7 +42,7 @@ const toLxStatecoin = (c: StatecoinSummary): LxStatecoin => ({
     utxoTxid: c.utxo_txid,
     utxoVout: c.utxo_vout,
     amount: c.amount == null ? null : BigInt(c.amount),
-    status: c.status as LxStatecoinStatus,
+    status: c.status as unknown as LxStatecoinStatus,
     address: c.address,
     depositAddress: c.aggregated_address,
     locktime: c.locktime,
@@ -154,7 +154,7 @@ export class LxWallet implements ILxWallet {
             // sync advances funded deposits (mints backup tx), then lists.
             await this.lxClient.client.wallet.sync(this.name);
             const coin = await this.getCoin(statechainId);
-            if (coin != null && coin.status === "CONFIRMED") return coin;
+            if (coin != null && coin.status === LxStatecoinStatus.CONFIRMED) return coin;
             await new Promise((r) => setTimeout(r, 5000));
         }
     }
@@ -215,7 +215,7 @@ export class LxWallet implements ILxWallet {
     async send(init: LxTransferInit): Promise<LxTransferStatus> {
         await this.lxClient.client.wallet.transferSend(this.name, init.statechainId, init.toAddress);
         const coin = await this.getCoin(init.statechainId);
-        return { statechainId: init.statechainId, status: coin?.status ?? "IN_TRANSFER" };
+        return { statechainId: init.statechainId, status: coin?.status ?? LxStatecoinStatus.IN_TRANSFER };
     }
 
     async getTransfer(statechainId: string): Promise<LxTransferStatus | null> {
@@ -224,8 +224,8 @@ export class LxWallet implements ILxWallet {
     }
 
     async waitForTransfer(statechainId: string, abortSignal?: AbortSignal): Promise<LxTransferStatus> {
-        const coin = await this.requirePoller().waitForCoin(statechainId, (c) => c.status === "TRANSFERRED", abortSignal);
-        return { statechainId, status: coin.status as LxStatecoinStatus };
+        const coin = await this.requirePoller().waitForCoin(statechainId, (c) => (c.status as unknown as LxStatecoinStatus) === LxStatecoinStatus.TRANSFERRED, abortSignal);
+        return { statechainId, status: coin.status as unknown as LxStatecoinStatus };
     }
 
     async newReceiveAddress(generateBatchId = false): Promise<LxReceiveAddress> {

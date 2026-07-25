@@ -1,11 +1,12 @@
 import { createMercuryClient } from "@zerosats/ml-core";
 import type { MercuryClient, Wallet, BitcoinNetwork } from "@zerosats/ml-core";
+import { LxNetwork, LxConnectionStatus } from "../ILxWallet";
 import { NodeStorageAdapter } from "./NodeStorageAdapter";
 
 export type LxClientConfig = {
     statechainEntity: string;
     esploraServer: string;
-    network: BitcoinNetwork;
+    network: LxNetwork;
     walletName: string;
     storageDir: string;
     // Optional: when omitted the SDK generates a fresh mnemonic on first create.
@@ -20,16 +21,14 @@ export type LxClientConfig = {
     initProbeDelayMs?: number;
 };
 
-// ml-core does no network I/O on client construction or wallet.create (local
-// key-gen), so nothing in the SDK path ever proves the SE/esplora are reachable.
-// LxClient probes them explicitly, mirroring how LNDClient gates readiness on a
-// live node, so isReady() cannot report ready against a dead SE.
+// wallet.create is not local: it calls esplora (getTipHeight) and the SE
+// (infoConfig). Nothing else in the SDK path proves the SE/esplora are reachable
+// either, so LxClient probes them explicitly, mirroring how LNDClient gates
+// readiness on a live node, so isReady() cannot report ready against a dead SE.
 const DEFAULT_PROBE_TIMEOUT_MS = 5000;
 const DEFAULT_WATCHDOG_MS = 30000;
 const DEFAULT_INIT_ATTEMPTS = 10;
 const DEFAULT_INIT_DELAY_MS = 3000;
-
-type LxStatus = "offline" | "connecting" | "ready" | "disconnected";
 
 /**
  * Owns the @zerosats/ml-core MercuryClient for the LX rail: config, the Node
@@ -41,7 +40,7 @@ export class LxClient {
     readonly config: LxClientConfig;
     readonly storage: NodeStorageAdapter;
     private mercury: MercuryClient | null = null;
-    status: LxStatus = "offline";
+    status: LxConnectionStatus = LxConnectionStatus.Offline;
     private watchdog: NodeJS.Timeout | null = null;
     private watchdogInFlight: boolean = false;
     private lastTipHeight: number | null = null;
@@ -52,7 +51,7 @@ export class LxClient {
     }
 
     isReady(): boolean {
-        return this.status === "ready";
+        return this.status === LxConnectionStatus.Ready;
     }
 
     getStatus(): string {
@@ -60,8 +59,9 @@ export class LxClient {
     }
 
     async getStatusInfo(): Promise<Record<string, string>> {
+        // No "Status" key here: callers surface getStatus() separately, so it
+        // would render twice in the node status output.
         return {
-            "Status": this.status,
             "Network": this.config.network,
             "Wallet": this.config.walletName,
             "Statechain entity": this.config.statechainEntity,
@@ -104,8 +104,8 @@ export class LxClient {
             if (this.watchdogInFlight) return;
             this.watchdogInFlight = true;
             this.probe()
-                .then((ok) => { this.status = ok ? "ready" : "disconnected"; })
-                .catch(() => { this.status = "disconnected"; })
+                .then((ok) => { this.status = ok ? LxConnectionStatus.Ready : LxConnectionStatus.Disconnected; })
+                .catch(() => { this.status = LxConnectionStatus.Disconnected; })
                 .finally(() => { this.watchdogInFlight = false; });
         }, this.config.watchdogIntervalMs ?? DEFAULT_WATCHDOG_MS);
         // Do not keep the process alive just for the watchdog.
@@ -132,7 +132,7 @@ export class LxClient {
 
     async init(): Promise<void> {
         if (this.mercury != null) return;
-        this.status = "connecting";
+        this.status = LxConnectionStatus.Connecting;
 
         // Only set optional tuning fields when provided: passing them as undefined
         // would override the SDK's config defaults (withConfigDefaults spreads
@@ -140,7 +140,9 @@ export class LxClient {
         const cfg: Partial<Parameters<typeof createMercuryClient>[0]> = {
             statechainEntity: this.config.statechainEntity,
             esploraServer: this.config.esploraServer,
-            network: this.config.network
+            // LxNetwork values equal the ml-core BitcoinNetwork strings; cast at
+            // this SDK boundary where the type is a string union, not our enum.
+            network: this.config.network as unknown as BitcoinNetwork
         };
         if (this.config.feeRateTolerance != null) cfg.feeRateTolerance = this.config.feeRateTolerance;
         if (this.config.maxFeeRate != null) cfg.maxFeeRate = this.config.maxFeeRate;
@@ -168,7 +170,7 @@ export class LxClient {
         }
         // Restart with an existing wallet: no create needed, so a dead SE only
         // means not-ready; the watchdog promotes to ready once it recovers.
-        this.status = ok ? "ready" : "disconnected";
+        this.status = ok ? LxConnectionStatus.Ready : LxConnectionStatus.Disconnected;
         this.startWatchdog();
     }
 

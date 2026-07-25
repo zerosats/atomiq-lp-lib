@@ -76,13 +76,39 @@ export interface ILxWallet {
 }
 
 /**
- * Statecoin lifecycle, mirroring mercurylib's CoinStatus. IN_TRANSFER means the
- * sender performed the transfer and the receiver has not completed it.
+ * Statecoin lifecycle, mirroring mercurylib's CoinStatus. Values match the SE
+ * status strings verbatim so a coin status crosses the boundary without mapping.
+ * IN_TRANSFER means the sender performed the transfer and the receiver has not
+ * completed it.
  */
-export type LxStatecoinStatus =
-    "INITIALISED" | "IN_MEMPOOL" | "UNCONFIRMED" | "CONFIRMED" |
-    "IN_TRANSFER" | "WITHDRAWING" | "TRANSFERRED" | "WITHDRAWN" |
-    "DUPLICATED" | "INVALIDATED";
+export enum LxStatecoinStatus {
+    INITIALISED = "INITIALISED",
+    IN_MEMPOOL = "IN_MEMPOOL",
+    UNCONFIRMED = "UNCONFIRMED",
+    CONFIRMED = "CONFIRMED",
+    IN_TRANSFER = "IN_TRANSFER",
+    WITHDRAWING = "WITHDRAWING",
+    TRANSFERRED = "TRANSFERRED",
+    WITHDRAWN = "WITHDRAWN",
+    DUPLICATED = "DUPLICATED",
+    INVALIDATED = "INVALIDATED"
+}
+
+/** Bitcoin network ids, matching the ml-core BitcoinNetwork string values. */
+export enum LxNetwork {
+    Bitcoin = "bitcoin",
+    Testnet = "testnet",
+    Signet = "signet",
+    Regtest = "regtest"
+}
+
+/** LxWallet connectivity lifecycle, surfaced by getStatus(). */
+export enum LxConnectionStatus {
+    Offline = "offline",
+    Connecting = "connecting",
+    Ready = "ready",
+    Disconnected = "disconnected"
+}
 
 /**
  * LP-facing projection of a statecoin, curated from the SDK's StatecoinSummary.
