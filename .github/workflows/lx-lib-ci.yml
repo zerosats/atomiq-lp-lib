@@ -1,0 +1,39 @@
+name: lx-lib-ci
+
+# Gate the LX wallet fork on its own: install, pull @zerosats/ml-core, and tsc.
+# Catches a break in lp-lib at the source, before the atomiq-lp image workflow
+# pulls this branch in. The fork has no unit tests (upstream ships none), so the
+# tsc build is the gate.
+
+on:
+  push:
+    branches: [lx-wallet]
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure GitHub Packages auth
+        run: printf "@zerosats:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n" "${{ secrets.GITHUB_TOKEN }}" > .npmrc
+
+      - name: Install + build (tsc gate)
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-audit --no-fund @zerosats/ml-core@latest
+          npm run build
+
+      - name: Remove npmrc
+        if: always()
+        run: rm -f .npmrc
