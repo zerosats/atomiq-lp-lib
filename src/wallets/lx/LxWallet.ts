@@ -154,6 +154,11 @@ export class LxWallet implements ILxWallet {
         return coin == null ? null : toLxStatecoin(coin);
     }
 
+    async listCoins(): Promise<LxStatecoin[]> {
+        const coins = await this.lxClient.client.wallet.list(this.name);
+        return coins.map(toLxStatecoin);
+    }
+
     /**
      * Wait for a deposit to reach CONFIRMED. Runs a foreground poll that advances
      * the coin with wallet.sync (which mints and signs the backup tx). This is a

@@ -1,5 +1,5 @@
 import { BitcoinRpc } from "@atomiqlabs/base";
-import { FromBtcLnAutoSwap, FromBtcLnRequestType, FromBtcLnSwapAbs, FromBtcLnTrustedSwap, FromBtcRequestType, FromBtcSwapAbs, FromBtcTrustedRequestType, FromBtcTrustedSwap, ISwapPrice, MultichainData, RequestData, SpvVaultPostQuote, SpvVaultSwap, SpvVaultSwapRequestType, SwapHandler, SwapHandlerType, ToBtcLnRequestType, ToBtcLnSwapAbs, ToBtcRequestType, ToBtcSwapAbs } from "..";
+import { FromBtcLnAutoSwap, FromBtcLnRequestType, FromBtcLnSwapAbs, FromBtcLnTrustedSwap, FromBtcRequestType, FromBtcSwapAbs, FromBtcTrustedRequestType, FromBtcTrustedSwap, ISwapPrice, MultichainData, RequestData, SpvVaultPostQuote, SpvVaultSwap, SpvVaultSwapRequestType, SwapHandler, SwapHandlerType, ToBtcLnRequestType, ToBtcLnSwapAbs, ToBtcLxRequestType, ToBtcRequestType, ToBtcSwapAbs } from "..";
 import { SwapHandlerSwap } from "../swaps/SwapHandlerSwap";
 import { Command } from "@atomiqlabs/server-base";
 import { FromBtcLnTrustedRequestType } from "../swaps/trusted/frombtcln_trusted/FromBtcLnTrusted";
@@ -117,7 +117,7 @@ export interface IPlugin {
      * @param swap
      */
     onHandlePreFromBtcExecute?(swapType: SwapHandlerType.FROM_BTCLN | SwapHandlerType.FROM_BTC | SwapHandlerType.FROM_BTCLN_TRUSTED | SwapHandlerType.FROM_BTC_TRUSTED | SwapHandlerType.FROM_BTC_SPV | SwapHandlerType.FROM_BTCLN_AUTO, swap: FromBtcLnSwapAbs | FromBtcSwapAbs | FromBtcLnTrustedSwap | FromBtcTrustedSwap | SpvVaultSwap | FromBtcLnAutoSwap): Promise<QuoteThrow | null>;
-    onHandlePreToBtcQuote?(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC, request: RequestData<ToBtcLnRequestType | ToBtcRequestType>, requestedAmount: {
+    onHandlePreToBtcQuote?(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX, request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>, requestedAmount: {
         input: boolean;
         amount: bigint;
         token: string;
@@ -128,7 +128,7 @@ export interface IPlugin {
         baseFeeInBtc: bigint;
         feePPM: bigint;
     }): Promise<QuoteThrow | QuoteSetFees | QuoteAmountTooLow | QuoteAmountTooHigh>;
-    onHandlePostToBtcQuote?(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC, request: RequestData<ToBtcLnRequestType | ToBtcRequestType>, requestedAmount: {
+    onHandlePostToBtcQuote?(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX, request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>, requestedAmount: {
         input: boolean;
         amount: bigint;
         token: string;

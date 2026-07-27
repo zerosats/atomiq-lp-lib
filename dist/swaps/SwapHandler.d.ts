@@ -13,7 +13,8 @@ export declare enum SwapHandlerType {
     FROM_BTCLN_TRUSTED = "FROM_BTCLN_TRUSTED",
     FROM_BTC_TRUSTED = "FROM_BTC_TRUSTED",
     FROM_BTC_SPV = "FROM_BTC_SPV",
-    FROM_BTCLN_AUTO = "FROM_BTCLN_AUTO"
+    FROM_BTCLN_AUTO = "FROM_BTCLN_AUTO",
+    TO_BTCLX = "TO_BTCLX"
 }
 export type SwapHandlerInfoType = {
     swapFeePPM: number;

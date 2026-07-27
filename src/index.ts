@@ -19,6 +19,8 @@ export * from "./swaps/escrow/tobtc_abstract/ToBtcAbs";
 export * from "./swaps/escrow/tobtc_abstract/ToBtcSwapAbs";
 export * from "./swaps/escrow/tobtcln_abstract/ToBtcLnAbs";
 export * from "./swaps/escrow/tobtcln_abstract/ToBtcLnSwapAbs";
+export * from "./swaps/escrow/tobtclx_abstract/ToBtcLxAbs";
+export * from "./swaps/escrow/tobtclx_abstract/ToBtcLxSwapAbs";
 
 export * from "./swaps/trusted/frombtc_trusted/FromBtcTrusted";
 export * from "./swaps/trusted/frombtc_trusted/FromBtcTrustedSwap";

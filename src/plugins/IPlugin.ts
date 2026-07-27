@@ -6,6 +6,7 @@ import {
     ISwapPrice, MultichainData, RequestData, SpvVaultPostQuote, SpvVaultSwap, SpvVaultSwapRequestType,
     SwapHandler, SwapHandlerType,
     ToBtcLnRequestType, ToBtcLnSwapAbs,
+    ToBtcLxRequestType,
     ToBtcRequestType, ToBtcSwapAbs
 } from "..";
 import {SwapHandlerSwap} from "../swaps/SwapHandlerSwap";
@@ -153,16 +154,16 @@ export interface IPlugin {
     ): Promise<QuoteThrow | null>;
 
     onHandlePreToBtcQuote?(
-        swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC,
-        request: RequestData<ToBtcLnRequestType | ToBtcRequestType>,
+        swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX,
+        request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>,
         requestedAmount: {input: boolean, amount: bigint, token: string},
         chainIdentifier: string,
         constraints: {minInBtc: bigint, maxInBtc: bigint},
         fees: {baseFeeInBtc: bigint, feePPM: bigint}
     ): Promise<QuoteThrow | QuoteSetFees | QuoteAmountTooLow | QuoteAmountTooHigh>;
     onHandlePostToBtcQuote?(
-        swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC,
-        request: RequestData<ToBtcLnRequestType | ToBtcRequestType>,
+        swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX,
+        request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>,
         requestedAmount: {input: boolean, amount: bigint, token: string, pricePrefetch?: Promise<bigint>},
         chainIdentifier: string,
         constraints: {minInBtc: bigint, maxInBtc: bigint},

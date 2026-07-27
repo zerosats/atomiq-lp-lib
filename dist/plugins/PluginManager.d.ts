@@ -1,6 +1,6 @@
 import { BitcoinRpc, SwapData } from "@atomiqlabs/base";
 import { IPlugin, PluginQuote, QuoteAmountTooHigh, QuoteAmountTooLow, QuoteSetFees, QuoteThrow, ToBtcPluginQuote } from "./IPlugin";
-import { FromBtcLnAutoSwap, FromBtcLnRequestType, FromBtcLnSwapAbs, FromBtcLnTrustedSwap, FromBtcRequestType, FromBtcSwapAbs, FromBtcTrustedRequestType, FromBtcTrustedSwap, ISwapPrice, MultichainData, RequestData, SpvVaultPostQuote, SpvVaultSwap, SpvVaultSwapRequestType, SwapHandler, SwapHandlerType, ToBtcLnRequestType, ToBtcLnSwapAbs, ToBtcRequestType, ToBtcSwapAbs } from "..";
+import { FromBtcLnAutoSwap, FromBtcLnRequestType, FromBtcLnSwapAbs, FromBtcLnTrustedSwap, FromBtcRequestType, FromBtcSwapAbs, FromBtcTrustedRequestType, FromBtcTrustedSwap, ISwapPrice, MultichainData, RequestData, SpvVaultPostQuote, SpvVaultSwap, SpvVaultSwapRequestType, SwapHandler, SwapHandlerType, ToBtcLnRequestType, ToBtcLnSwapAbs, ToBtcLxRequestType, ToBtcRequestType, ToBtcSwapAbs } from "..";
 import { SwapHandlerSwap } from "../swaps/SwapHandlerSwap";
 import { FromBtcLnTrustedRequestType } from "../swaps/trusted/frombtcln_trusted/FromBtcLnTrusted";
 import { IBitcoinWallet } from "../wallets/IBitcoinWallet";
@@ -76,7 +76,7 @@ export declare class PluginManager {
     static onHandlePreFromBtcExecute(swapType: SwapHandlerType.FROM_BTCLN | SwapHandlerType.FROM_BTC | SwapHandlerType.FROM_BTCLN_TRUSTED | SwapHandlerType.FROM_BTC_TRUSTED | SwapHandlerType.FROM_BTC_SPV | SwapHandlerType.FROM_BTCLN_AUTO, swap: FromBtcLnSwapAbs | FromBtcSwapAbs | FromBtcLnTrustedSwap | FromBtcTrustedSwap | SpvVaultSwap | FromBtcLnAutoSwap): Promise<QuoteThrow | null>;
     static onHandlePostToBtcQuote<T extends {
         networkFee: bigint;
-    }>(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC, request: RequestData<ToBtcLnRequestType | ToBtcRequestType>, requestedAmount: {
+    }>(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX, request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>, requestedAmount: {
         input: boolean;
         amount: bigint;
         token: string;
@@ -91,7 +91,7 @@ export declare class PluginManager {
     }): Promise<QuoteThrow | QuoteSetFees | QuoteAmountTooLow | QuoteAmountTooHigh | (ToBtcPluginQuote & {
         networkFeeData: T;
     })>;
-    static onHandlePreToBtcQuote(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC, request: RequestData<ToBtcLnRequestType | ToBtcRequestType>, requestedAmount: {
+    static onHandlePreToBtcQuote(swapType: SwapHandlerType.TO_BTCLN | SwapHandlerType.TO_BTC | SwapHandlerType.TO_BTCLX, request: RequestData<ToBtcLnRequestType | ToBtcRequestType | ToBtcLxRequestType>, requestedAmount: {
         input: boolean;
         amount: bigint;
         token: string;

@@ -13,6 +13,7 @@ var SwapHandlerType;
     SwapHandlerType["FROM_BTC_TRUSTED"] = "FROM_BTC_TRUSTED";
     SwapHandlerType["FROM_BTC_SPV"] = "FROM_BTC_SPV";
     SwapHandlerType["FROM_BTCLN_AUTO"] = "FROM_BTCLN_AUTO";
+    SwapHandlerType["TO_BTCLX"] = "TO_BTCLX";
 })(SwapHandlerType = exports.SwapHandlerType || (exports.SwapHandlerType = {}));
 /**
  * An abstract class defining a singular swap service
