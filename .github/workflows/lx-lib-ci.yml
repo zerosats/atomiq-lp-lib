@@ -1,9 +1,9 @@
 name: lx-lib-ci
 
-# Gate the LX wallet fork on its own: install, pull @zerosats/ml-core, and tsc.
-# Catches a break in lp-lib at the source, before the atomiq-lp image workflow
-# pulls this branch in. The fork has no unit tests (upstream ships none), so the
-# tsc build is the gate.
+# Gate the LX wallet fork on its own: install, pull @zerosats/ml-core, tsc, and
+# the offline unit tests. Catches a break in lp-lib at the source, before the
+# atomiq-lp image workflow pulls this branch in. The tests are offline (ml-core
+# aliased to a stub), so they need no wasm or SE.
 
 on:
   push:
@@ -33,6 +33,9 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-audit --no-fund @zerosats/ml-core@latest
           npm run build
+
+      - name: Unit tests
+        run: npm test
 
       - name: Remove npmrc
         if: always()
