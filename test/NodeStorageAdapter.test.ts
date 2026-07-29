@@ -53,6 +53,27 @@ describe("NodeStorageAdapter", () => {
         expect(await reopened.latchGet("c")).toBe("3");
     });
 
+    it("keeps the store owner-only (it holds the mnemonic and coin private keys)", async () => {
+        const s = new NodeStorageAdapter(dir);
+        await s.putWallet({ name: "w" } as any);
+        const st = await fs.stat(path.join(dir, "lx-store.json"));
+        expect(st.mode & 0o777).toBe(0o600);
+    });
+
+    it("tightens the permissions of a store written by an older build", async () => {
+        const file = path.join(dir, "lx-store.json");
+        await fs.writeFile(file, JSON.stringify({ wallets: {}, backups: {}, latch: {} }), "utf8");
+        await fs.chmod(file, 0o644);
+        await new NodeStorageAdapter(dir).getWallet("w"); // a read alone must fix it
+        expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
+    });
+
+    it("creates a missing storage directory owner-only", async () => {
+        const nested = path.join(dir, "nested");
+        await new NodeStorageAdapter(nested).latchPut("b", "sc");
+        expect((await fs.stat(nested)).mode & 0o777).toBe(0o700);
+    });
+
     it("normalizes a store written before the `latch` field existed", async () => {
         await fs.writeFile(path.join(dir, "lx-store.json"), JSON.stringify({ wallets: {}, backups: {} }), "utf8");
         const s = new NodeStorageAdapter(dir);

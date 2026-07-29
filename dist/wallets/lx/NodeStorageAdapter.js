@@ -4,6 +4,10 @@ exports.NodeStorageAdapter = void 0;
 const fs = require("fs/promises");
 const path = require("path");
 const emptyStore = () => ({ wallets: {}, backups: {}, latch: {} });
+// The store holds the wallet mnemonic and every coin's user_privkey/auth_privkey
+// in the clear, so keep it owner-only rather than the 0644/0777 the defaults give.
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
 /**
  * Node filesystem StorageAdapter for @zerosats/ml-core. The SDK default is
  * browser localStorage, unusable in an LP node, so an explicit adapter is
@@ -28,6 +32,10 @@ class NodeStorageAdapter {
             return this.cache;
         try {
             const raw = await fs.readFile(this.filePath, "utf8");
+            // A store created before FILE_MODE existed keeps its old permissions
+            // until the next write, so tighten it on open. Best effort: a foreign
+            // owner (the file survived a container UID change) must not fail boot.
+            await fs.chmod(this.filePath, FILE_MODE).catch(() => undefined);
             const parsed = JSON.parse(raw);
             // Normalize: a store written before `latch` existed lacks the field.
             this.cache = {
@@ -47,9 +55,11 @@ class NodeStorageAdapter {
         return this.cache;
     }
     async persist(store) {
-        await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+        await fs.mkdir(path.dirname(this.filePath), { recursive: true, mode: DIR_MODE });
         const tmp = this.filePath + "." + process.pid + "." + Date.now() + ".tmp";
-        await fs.writeFile(tmp, JSON.stringify(store), "utf8");
+        // The mode rides on the temp file: rename preserves it, so the target is
+        // never briefly world-readable.
+        await fs.writeFile(tmp, JSON.stringify(store), { encoding: "utf8", mode: FILE_MODE });
         await fs.rename(tmp, this.filePath);
     }
     // Runs the mutator against a COPY and swaps the cache in only after the rename
