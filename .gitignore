@@ -1,3 +1,7 @@
 node_modules
 package-lock.json
 .idea
+# Credentials for the @zerosats GitHub Packages registry. The CI job writes
+# .npmrc from a secret and deletes it again; keep both out of the tree either way.
+.npmrc
+.gh_token
