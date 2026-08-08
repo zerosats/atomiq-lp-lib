@@ -10,6 +10,14 @@ import type { StorageAdapter, Wallet, BackupTx } from "@zerosats/ml-core";
  * over the target: a truncate-then-write loses the mnemonic on a mid-write crash.
  * One instance per backend is the ownership boundary, so the LP node must share a
  * single instance per store dir.
+ *
+ * Reads and writes copy, matching the reference localStorage adapter, which
+ * JSON-parses a fresh object every read. The flows mutate the wallet they were
+ * handed and persist once at the end (coin_status sets locktime and rebinds the
+ * funding outpoint mid-loop; withdraw sets the coin status), so handing out the
+ * cached object let a flow that threw before its putWallet leave the cache
+ * carrying state that never reached disk, and let the caller keep mutating the
+ * cache after the write returned.
  */
 export declare class NodeStorageAdapter implements StorageAdapter {
     private readonly filePath;

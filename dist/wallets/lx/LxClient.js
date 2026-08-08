@@ -124,6 +124,14 @@ class LxClient {
             cfg.maxFeeRate = this.config.maxFeeRate;
         if (this.config.confirmationTarget != null)
             cfg.confirmationTarget = this.config.confirmationTarget;
+        if (this.config.allowInsecureHttp != null)
+            cfg.allowInsecureHttp = this.config.allowInsecureHttp;
+        // null is a meaningful value for both (wait forever), so these are guarded
+        // on undefined alone, unlike the fields above.
+        if (this.config.requestTimeoutMs !== undefined)
+            cfg.requestTimeoutMs = this.config.requestTimeoutMs;
+        if (this.config.walletLockWaitMs !== undefined)
+            cfg.walletLockWaitMs = this.config.walletLockWaitMs;
         this.mercury = (0, ml_core_1.createMercuryClient)(cfg, { storage: this.storage });
         // Bounded readiness probe FIRST. wallet.create is not local: it calls
         // esplora (getTipHeight) and the SE (infoConfig), so bootstrapping a new

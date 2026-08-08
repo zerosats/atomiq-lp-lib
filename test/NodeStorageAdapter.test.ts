@@ -44,6 +44,42 @@ describe("NodeStorageAdapter", () => {
         expect(await s.getWallet("w")).toEqual({ name: "w", extra: "x" });
     });
 
+    // The SDK flows mutate the wallet they were handed and persist once at the
+    // end, so handing out the cached object let a flow that threw before its
+    // putWallet leave the cache carrying state that never reached disk.
+    it("does not let a caller mutate the cache through a wallet it read", async () => {
+        const s = new NodeStorageAdapter(dir);
+        await s.putWallet({ name: "w", coins: [{ locktime: null }] } as any);
+
+        const read: any = await s.getWallet("w");
+        read.coins[0].locktime = 500; // a flow that then throws before putWallet
+
+        expect((await s.getWallet("w")) as any).toEqual({ name: "w", coins: [{ locktime: null }] });
+        expect((await new NodeStorageAdapter(dir).getWallet("w")) as any)
+            .toEqual({ name: "w", coins: [{ locktime: null }] });
+    });
+
+    it("does not let a caller mutate the cache through a wallet it wrote", async () => {
+        const s = new NodeStorageAdapter(dir);
+        const wallet: any = { name: "w", coins: [{ locktime: null }] };
+        await s.putWallet(wallet);
+        wallet.coins[0].locktime = 500; // the flow keeps its reference after the write
+
+        expect((await s.getWallet("w")) as any).toEqual({ name: "w", coins: [{ locktime: null }] });
+    });
+
+    it("does not let a caller mutate the cached backup transactions", async () => {
+        const s = new NodeStorageAdapter(dir);
+        const txs: any = [{ tx_n: 1, tx: "aa" }];
+        await s.putBackupTransactions("w", "sc", txs);
+        txs.push({ tx_n: 2, tx: "bb" });
+
+        expect(await s.getBackupTransactions("w", "sc")).toEqual([{ tx_n: 1, tx: "aa" }]);
+        const read = await s.getBackupTransactions("w", "sc");
+        read.push({ tx_n: 3 } as any);
+        expect(await s.getBackupTransactions("w", "sc")).toEqual([{ tx_n: 1, tx: "aa" }]);
+    });
+
     it("serializes concurrent latch writes without losing any", async () => {
         const s = new NodeStorageAdapter(dir);
         await Promise.all([s.latchPut("a", "1"), s.latchPut("b", "2"), s.latchPut("c", "3")]);

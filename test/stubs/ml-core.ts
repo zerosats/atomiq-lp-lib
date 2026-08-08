@@ -4,14 +4,15 @@
 // `instanceof SERejected && status !== 404`) and createMercuryClient (never
 // called under test; the wallet's LxClient is replaced by a fake).
 
+// Mirrors the real signature exactly: SERejected(status, body), message built by
+// the SDK, `name` from the constructor. An earlier stub declared
+// (message, status, body); a test constructing it that way put the message where
+// the status belongs, so the 404 branch it claimed to cover was never taken.
 export class SERejected extends Error {
-    status: number;
-    body: unknown;
-    constructor(message: string, status: number, body?: unknown) {
-        super(message);
+    readonly code = "SE_REJECTED";
+    constructor(readonly status: number, readonly body: unknown) {
+        super(`the SE rejected the request with status ${status}: ${JSON.stringify(body)}`);
         this.name = "SERejected";
-        this.status = status;
-        this.body = body;
     }
 }
 

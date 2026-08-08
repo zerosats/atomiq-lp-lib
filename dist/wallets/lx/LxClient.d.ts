@@ -8,9 +8,12 @@ export type LxClientConfig = {
     walletName: string;
     storageDir: string;
     mnemonic?: string;
+    allowInsecureHttp?: boolean;
     feeRateTolerance?: number;
     maxFeeRate?: number;
     confirmationTarget?: number;
+    requestTimeoutMs?: number | null;
+    walletLockWaitMs?: number | null;
     probeTimeoutMs?: number;
     watchdogIntervalMs?: number;
     initProbeAttempts?: number;

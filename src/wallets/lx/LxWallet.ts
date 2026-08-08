@@ -18,6 +18,7 @@ import type {
     LxLatchedTransfer,
     LxLatchSettleResult,
     LxLatchSettleOptions,
+    LxWaitOptions,
     LxTransferInit,
     LxTransferStatus,
     LxReceiveAddress,
@@ -31,11 +32,51 @@ import { LxPoller } from "./LxPoller";
 
 const logger = getLogger("LxWallet: ");
 
+// Ceilings on a stall, not service-level expectations: both waits are for a
+// state that can stop advancing permanently (a replaced funding transaction, a
+// receiver that never claims), so a caller with its own deadline passes it in.
+const DEFAULT_DEPOSIT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_TRANSFER_TIMEOUT_MS = 60 * 60 * 1000;
+
+// AbortSignal.any/timeout are not in the @types/node this package pins, so the
+// composition is explicit. Returns the signal plus a dispose that clears the
+// timer and detaches the listener, so a resolved wait leaves nothing behind.
+const withTimeout = (timeoutMs: number, signal?: AbortSignal): {signal: AbortSignal, dispose: () => void} => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error("timed out after " + timeoutMs + "ms")), timeoutMs);
+    const onAbort = () => controller.abort(signal?.reason ?? new Error("Aborted"));
+    if (signal != null) {
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+    }
+    return {
+        signal: controller.signal,
+        dispose: () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", onAbort);
+        }
+    };
+};
+
 // sats fit well under 2^53 (21e14 max), but Number(bigint) truncates silently, so
 // reject out-of-range amounts at the ml-core boundary rather than corrupt them.
 const satsToNumber = (v: bigint): number => {
     if (v < 0n || v > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("amount out of safe range: " + v.toString());
     return Number(v);
+};
+
+// An explicit fee rate is passed to the SDK as given. The two SDK paths disagree
+// on 0: withdraw uses a supplied rate verbatim (and its signing funnel rejects a
+// non-positive one), while broadcastBackup still reads 0 as "use the estimate".
+// Refuse it here so both directions behave the same, and so the old accident of
+// 0 silently meaning "estimate" cannot come back. undefined stays undefined: that
+// is how a caller asks for the estimate.
+const checkFeeRate = (feeRate?: number): number | undefined => {
+    if (feeRate == null) return undefined;
+    if (!Number.isFinite(feeRate) || feeRate <= 0) {
+        throw new Error("feeRate must be a finite number greater than 0; got " + feeRate);
+    }
+    return feeRate;
 };
 
 const toLxStatecoin = (c: StatecoinSummary): LxStatecoin => ({
@@ -164,15 +205,33 @@ export class LxWallet implements ILxWallet {
      * the coin with wallet.sync (which mints and signs the backup tx). This is a
      * caller-driven signing step, distinct from the background poller, which never
      * signs.
+     *
+     * Bounded, and it must be: sync fails closed on a coin whose funding outpoint
+     * the chain no longer carries (a fee-bumped or evicted funding transaction),
+     * skipping it rather than spending a signature slot on a backup that can never
+     * confirm. That coin never reaches CONFIRMED, so the timeout is the only exit.
+     * Status changes are logged, so a stall is diagnosable from the node log
+     * instead of presenting as a coin that never appears in inventory.
      */
-    async waitForDeposit(statechainId: string, abortSignal?: AbortSignal): Promise<LxStatecoin> {
+    async waitForDeposit(statechainId: string, opts: LxWaitOptions = {}): Promise<LxStatecoin> {
+        const pollMs = opts.pollIntervalMs ?? this.pollIntervalMs;
+        const deadline = Date.now() + (opts.timeoutMs ?? DEFAULT_DEPOSIT_TIMEOUT_MS);
+        let lastStatus: string | null = null;
         for (;;) {
-            if (abortSignal?.aborted) throw abortSignal.reason ?? new Error("Aborted");
+            if (opts.abortSignal?.aborted) throw opts.abortSignal.reason ?? new Error("Aborted");
             // sync advances funded deposits (mints backup tx), then lists.
             await this.lxClient.client.wallet.sync(this.name);
             const coin = await this.getCoin(statechainId);
+            const status = coin?.status ?? "absent";
+            if (status !== lastStatus) {
+                logger.info("waitForDeposit: " + statechainId + " is " + status);
+                lastStatus = status;
+            }
             if (coin != null && coin.status === LxStatecoinStatus.CONFIRMED) return coin;
-            await new Promise((r) => setTimeout(r, 5000));
+            if (Date.now() >= deadline) {
+                throw new Error("waitForDeposit timed out for " + statechainId + ", last status: " + status);
+            }
+            await new Promise((r) => setTimeout(r, pollMs));
         }
     }
 
@@ -182,7 +241,18 @@ export class LxWallet implements ILxWallet {
         // crash after the coin leaves can still be settled (the SE offers no
         // batchId -> statechainId lookup).
         await this.lxClient.storage.latchPut(batchId, init.statechainId);
-        await this.lxClient.client.wallet.transferSend(this.name, init.statechainId, init.toAddress, { batchId });
+        const sent = await this.lxClient.client.wallet.transferSend(this.name, init.statechainId, init.toAddress, { batchId });
+        // The send is the irreversible step, so record what it spent: the receipt
+        // names the SE signature slots used and the locktime the unilateral exit
+        // moved to. Diagnostic only, and optional so an older ml-core (the range
+        // admits one without receipts) does not fault the latch path.
+        const receipt = (sent as any)?.receipt;
+        if (receipt != null) {
+            logger.info("createLatchedTransfer: sent " + init.statechainId +
+                " batch " + batchId +
+                " signatures " + receipt.signing?.signaturesProduced +
+                " locktime " + receipt.backup?.previousLocktime + " -> " + receipt.backup?.newLocktime);
+        }
         return { batchId, paymentHash: hash, statechainId: init.statechainId };
     }
 
@@ -240,9 +310,25 @@ export class LxWallet implements ILxWallet {
         return coin == null ? null : { statechainId, status: coin.status };
     }
 
-    async waitForTransfer(statechainId: string, abortSignal?: AbortSignal): Promise<LxTransferStatus> {
-        const coin = await this.requirePoller().waitForCoin(statechainId, (c) => (c.status as unknown as LxStatecoinStatus) === LxStatecoinStatus.TRANSFERRED, abortSignal);
-        return { statechainId, status: coin.status as unknown as LxStatecoinStatus };
+    /**
+     * Wait until the receiver has claimed the coin (TRANSFERRED). Bounded for the
+     * same reason as waitForDeposit: a receiver that never claims never moves the
+     * status. opts.pollIntervalMs is not honoured here; the cadence belongs to the
+     * shared background poller (LxWalletConfig.pollIntervalMs), and re-timing it
+     * per call would re-time it for every other waiter too.
+     */
+    async waitForTransfer(statechainId: string, opts: LxWaitOptions = {}): Promise<LxTransferStatus> {
+        const bounded = withTimeout(opts.timeoutMs ?? DEFAULT_TRANSFER_TIMEOUT_MS, opts.abortSignal);
+        try {
+            const coin = await this.requirePoller().waitForCoin(
+                statechainId,
+                (c) => (c.status as unknown as LxStatecoinStatus) === LxStatecoinStatus.TRANSFERRED,
+                bounded.signal
+            );
+            return { statechainId, status: coin.status as unknown as LxStatecoinStatus };
+        } finally {
+            bounded.dispose();
+        }
     }
 
     async newReceiveAddress(generateBatchId = false): Promise<LxReceiveAddress> {
@@ -266,13 +352,13 @@ export class LxWallet implements ILxWallet {
     }
 
     async withdraw(statechainId: string, toAddress: string, feeRate?: number): Promise<string> {
-        const op = await this.lxClient.client.wallet.withdraw(this.name, statechainId, toAddress, { feeRate });
+        const op = await this.lxClient.client.wallet.withdraw(this.name, statechainId, toAddress, { feeRate: checkFeeRate(feeRate) });
         if (op.reference == null) throw new Error("Withdraw did not return a broadcast txid");
         return op.reference;
     }
 
     async forceExit(statechainId: string, toAddress: string, feeRate?: number): Promise<LxBroadcastResult> {
-        const res = await this.lxClient.client.wallet.broadcastBackup(this.name, statechainId, toAddress, { feeRate });
+        const res = await this.lxClient.client.wallet.broadcastBackup(this.name, statechainId, toAddress, { feeRate: checkFeeRate(feeRate) });
         return { backupTxid: res.backupTx, cpfpTxid: res.cpfpTx };
     }
 

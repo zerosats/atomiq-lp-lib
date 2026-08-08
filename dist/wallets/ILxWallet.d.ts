@@ -54,7 +54,13 @@ export interface ILxWallet {
     getCoin(statechainId: string): Promise<LxStatecoin | null>;
     /** All statecoins in the wallet, across every status. */
     listCoins(): Promise<LxStatecoin[]>;
-    waitForDeposit(statechainId: string, abortSignal?: AbortSignal): Promise<LxStatecoin>;
+    /**
+     * Wait for a deposit to reach CONFIRMED. Bounded: a funding transaction the
+     * chain no longer carries (replaced by fee-bump, or evicted) leaves the coin
+     * un-advanceable, and the SDK fails closed by skipping it rather than signing
+     * a backup that can never confirm, so an unbounded wait would hang for good.
+     */
+    waitForDeposit(statechainId: string, opts?: LxWaitOptions): Promise<LxStatecoin>;
     createLatchedTransfer(init: LxLatchedTransferInit): Promise<LxLatchedTransfer>;
     /**
      * Reveal the latch preimage. Polls until the receiver has claimed the coin
@@ -65,7 +71,7 @@ export interface ILxWallet {
     cancelLatchedTransfer(batchId: string): Promise<void>;
     send(init: LxTransferInit): Promise<LxTransferStatus>;
     getTransfer(statechainId: string): Promise<LxTransferStatus | null>;
-    waitForTransfer(statechainId: string, abortSignal?: AbortSignal): Promise<LxTransferStatus>;
+    waitForTransfer(statechainId: string, opts?: LxWaitOptions): Promise<LxTransferStatus>;
     newReceiveAddress(generateBatchId?: boolean): Promise<LxReceiveAddress>;
     receiveTransfers(): Promise<LxReceiveResult>;
     withdraw(statechainId: string, toAddress: string, feeRate?: number): Promise<string>;
@@ -166,6 +172,17 @@ export type LxLatchSettleResult = {
 };
 /** Bounds the settleLatchedTransfer poll that waits for the receiver to claim. */
 export type LxLatchSettleOptions = {
+    abortSignal?: AbortSignal;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+};
+/**
+ * Bounds a waitFor* poll. Same shape as LxLatchSettleOptions; kept separate
+ * because those two wait on the counterparty and these wait on the chain.
+ * timeoutMs omitted takes the implementation's default: there is no unbounded
+ * wait, because every state these poll for can stop advancing permanently.
+ */
+export type LxWaitOptions = {
     abortSignal?: AbortSignal;
     timeoutMs?: number;
     pollIntervalMs?: number;

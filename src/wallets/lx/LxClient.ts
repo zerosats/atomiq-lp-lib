@@ -10,10 +10,30 @@ export type LxClientConfig = {
     walletName: string;
     storageDir: string;
     // Optional: when omitted the SDK generates a fresh mnemonic on first create.
+    // Validated against the BIP39 wordlist and checksum, not merely counted, so a
+    // phrase with a typo is refused at bootstrap instead of trapping later.
     mnemonic?: string;
+    // Accept plaintext http for statechainEntity / esploraServer. The SDK is
+    // https-only without it and refuses the config outright, so a regtest or
+    // in-cluster stand on http must set this. Nothing binds the SE deposit key
+    // share to a trusted identity, so on plaintext an intermediary that rewrites
+    // it strands the deposit at an address no one can sign for: set this only for
+    // a stand or a channel authenticated by other means.
+    allowInsecureHttp?: boolean;
+    // Numeric domains the SDK enforces: feeRateTolerance >= 0, maxFeeRate > 0,
+    // confirmationTarget a positive integer. Out-of-domain values are refused at
+    // client construction, i.e. the node fails to boot with the field named.
     feeRateTolerance?: number;
     maxFeeRate?: number;
     confirmationTarget?: number;
+    // Deadline for one SE / esplora request (SDK default 30s; null waits forever).
+    requestTimeoutMs?: number | null;
+    // How long a call queues for the wallet lock before throwing WalletBusy. The
+    // SDK default (null) queues forever. Worth bounding here: the background
+    // poller's transferReceive takes the same lock as the /payStatecoin path's
+    // paymentHash and transferSend, so an unbounded wait stalls a quote past its
+    // HTTP deadline with nothing naming the cause.
+    walletLockWaitMs?: number | null;
     // Health-probe tuning (ms / count). Defaults below.
     probeTimeoutMs?: number;
     watchdogIntervalMs?: number;
@@ -147,6 +167,11 @@ export class LxClient {
         if (this.config.feeRateTolerance != null) cfg.feeRateTolerance = this.config.feeRateTolerance;
         if (this.config.maxFeeRate != null) cfg.maxFeeRate = this.config.maxFeeRate;
         if (this.config.confirmationTarget != null) cfg.confirmationTarget = this.config.confirmationTarget;
+        if (this.config.allowInsecureHttp != null) cfg.allowInsecureHttp = this.config.allowInsecureHttp;
+        // null is a meaningful value for both (wait forever), so these are guarded
+        // on undefined alone, unlike the fields above.
+        if (this.config.requestTimeoutMs !== undefined) cfg.requestTimeoutMs = this.config.requestTimeoutMs;
+        if (this.config.walletLockWaitMs !== undefined) cfg.walletLockWaitMs = this.config.walletLockWaitMs;
         this.mercury = createMercuryClient(cfg, { storage: this.storage });
 
         // Bounded readiness probe FIRST. wallet.create is not local: it calls

@@ -1,5 +1,5 @@
 import { Command } from "@atomiqlabs/server-base";
-import type { ILxWallet, LxStatecoin, LxDepositInit, LxDeposit, LxDepositToken, LxLatchedTransferInit, LxLatchedTransfer, LxLatchSettleResult, LxLatchSettleOptions, LxTransferInit, LxTransferStatus, LxReceiveAddress, LxReceiveResult, LxBalanceResponse, LxBroadcastResult } from "../ILxWallet";
+import type { ILxWallet, LxStatecoin, LxDepositInit, LxDeposit, LxDepositToken, LxLatchedTransferInit, LxLatchedTransfer, LxLatchSettleResult, LxLatchSettleOptions, LxWaitOptions, LxTransferInit, LxTransferStatus, LxReceiveAddress, LxReceiveResult, LxBalanceResponse, LxBroadcastResult } from "../ILxWallet";
 import { type LxClientConfig } from "./LxClient";
 export type LxWalletConfig = LxClientConfig & {
     pollIntervalMs?: number;
@@ -33,8 +33,15 @@ export declare class LxWallet implements ILxWallet {
      * the coin with wallet.sync (which mints and signs the backup tx). This is a
      * caller-driven signing step, distinct from the background poller, which never
      * signs.
+     *
+     * Bounded, and it must be: sync fails closed on a coin whose funding outpoint
+     * the chain no longer carries (a fee-bumped or evicted funding transaction),
+     * skipping it rather than spending a signature slot on a backup that can never
+     * confirm. That coin never reaches CONFIRMED, so the timeout is the only exit.
+     * Status changes are logged, so a stall is diagnosable from the node log
+     * instead of presenting as a coin that never appears in inventory.
      */
-    waitForDeposit(statechainId: string, abortSignal?: AbortSignal): Promise<LxStatecoin>;
+    waitForDeposit(statechainId: string, opts?: LxWaitOptions): Promise<LxStatecoin>;
     createLatchedTransfer(init: LxLatchedTransferInit): Promise<LxLatchedTransfer>;
     /**
      * Reveal the latch preimage. NOT a one-shot: confirmInvoice clears only the
@@ -48,7 +55,14 @@ export declare class LxWallet implements ILxWallet {
     cancelLatchedTransfer(batchId: string): Promise<void>;
     send(init: LxTransferInit): Promise<LxTransferStatus>;
     getTransfer(statechainId: string): Promise<LxTransferStatus | null>;
-    waitForTransfer(statechainId: string, abortSignal?: AbortSignal): Promise<LxTransferStatus>;
+    /**
+     * Wait until the receiver has claimed the coin (TRANSFERRED). Bounded for the
+     * same reason as waitForDeposit: a receiver that never claims never moves the
+     * status. opts.pollIntervalMs is not honoured here; the cadence belongs to the
+     * shared background poller (LxWalletConfig.pollIntervalMs), and re-timing it
+     * per call would re-time it for every other waiter too.
+     */
+    waitForTransfer(statechainId: string, opts?: LxWaitOptions): Promise<LxTransferStatus>;
     newReceiveAddress(generateBatchId?: boolean): Promise<LxReceiveAddress>;
     receiveTransfers(): Promise<LxReceiveResult>;
     withdraw(statechainId: string, toAddress: string, feeRate?: number): Promise<string>;

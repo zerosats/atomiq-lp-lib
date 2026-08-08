@@ -30,6 +30,14 @@ const DIR_MODE = 0o700;
  * over the target: a truncate-then-write loses the mnemonic on a mid-write crash.
  * One instance per backend is the ownership boundary, so the LP node must share a
  * single instance per store dir.
+ *
+ * Reads and writes copy, matching the reference localStorage adapter, which
+ * JSON-parses a fresh object every read. The flows mutate the wallet they were
+ * handed and persist once at the end (coin_status sets locktime and rebinds the
+ * funding outpoint mid-loop; withdraw sets the coin status), so handing out the
+ * cached object let a flow that threw before its putWallet leave the cache
+ * carrying state that never reached disk, and let the caller keep mutating the
+ * cache after the write returned.
  */
 export class NodeStorageAdapter implements StorageAdapter {
 
@@ -96,23 +104,27 @@ export class NodeStorageAdapter implements StorageAdapter {
 
     async getWallet(walletName: string): Promise<Wallet | null> {
         const store = await this.load();
-        return store.wallets[walletName] ?? null;
+        const wallet = store.wallets[walletName];
+        return wallet == null ? null : structuredClone(wallet);
     }
 
     putWallet(wallet: Wallet): Promise<void> {
+        const snapshot = structuredClone(wallet);
         return this.enqueue((store) => {
-            store.wallets[wallet.name] = wallet;
+            store.wallets[snapshot.name] = snapshot;
         });
     }
 
     async getBackupTransactions(walletName: string, statechainId: string): Promise<BackupTx[]> {
         const store = await this.load();
-        return store.backups[walletName]?.[statechainId] ?? [];
+        const backups = store.backups[walletName]?.[statechainId];
+        return backups == null ? [] : structuredClone(backups);
     }
 
     putBackupTransactions(walletName: string, statechainId: string, backupTransactions: BackupTx[]): Promise<void> {
+        const snapshot = structuredClone(backupTransactions);
         return this.enqueue((store) => {
-            (store.backups[walletName] ??= {})[statechainId] = backupTransactions;
+            (store.backups[walletName] ??= {})[statechainId] = snapshot;
         });
     }
 
